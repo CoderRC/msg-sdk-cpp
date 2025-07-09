@@ -1,0 +1,80 @@
+srcdir=@srcdir@
+VPATH=$(srcdir):bin
+
+prefix=@prefix@
+
+CC=@CC@
+DEFS=@DEFS@
+DEFAULT_INCLUDES=-I@srcdir@/include
+INCLUDES=$(notdir null/)
+CPPFLAGS=@CPPFLAGS@
+CFLAGS=@CFLAGS@
+LDFLAGS=@LDFLAGS@
+AR=@AR@
+ARFLAGS=r
+OBJEXT=@OBJEXT@
+SOURCES=@SOURCES@
+OBJECTS=$(patsubst $(srcdir)/source/%.cpp, obj/%.$(OBJEXT), $(SOURCES))
+INCLUDE_DIRECTORIES=@INCLUDE_DIRECTORIES@
+INCLUDE_FILES=@INCLUDE_FILES@
+
+# New variables for enhanced functionality
+LIB_NAME = msg-sdk-cpp
+
+# Platform-specific library names
+ifeq ($(OS),Windows_NT)
+    LIB_SHARED = lib/lib$(LIB_NAME).dll
+    LIB_IMPORT = lib/lib$(LIB_NAME).lib
+else
+    LIB_SHARED = lib/lib$(LIB_NAME).so
+endif
+
+.PHONY: all clean static shared install
+
+all: compile_objects compile_library compile_include shared
+
+compile_objects: obj $(OBJECTS)
+
+obj/%.$(OBJEXT): $(srcdir)/source/%.c
+	@mkdir -p $(@D)
+	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+obj/%.$(OBJEXT): $(srcdir)/source/%.cpp
+	@mkdir -p $(@D)
+	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+obj:
+	mkdir -p obj
+
+compile_library: lib lib/lib$(LIB_NAME).a
+
+lib/lib$(LIB_NAME).a: $(OBJECTS)
+	$(AR) $(ARFLAGS) $@ $?
+
+lib:
+	mkdir -p lib
+
+compile_include: $(addprefix $(CURDIR)/, $(INCLUDE_DIRECTORIES)) $(addprefix $(CURDIR)/, $(INCLUDE_FILES))
+
+$(addprefix $(CURDIR)/, $(INCLUDE_DIRECTORIES)):
+	mkdir -p $@
+
+$(addprefix $(CURDIR)/, $(INCLUDE_FILES)): $(CURDIR)/%: %
+	cp -R $< $(@:$(CURDIR)/%=%)
+
+# Shared library target
+shared: $(LIB_SHARED)
+
+$(LIB_SHARED): $(OBJECTS)
+ifeq ($(OS),Windows_NT)
+	$(CC) -shared -o $@ $^ $(LDFLAGS) -Wl,--out-implib,$(LIB_IMPORT)
+else
+	$(CC) -shared -o $@ $^ $(LDFLAGS)
+endif
+
+install:
+	cp -R lib/* $(prefix)/lib
+	cp -R include/* $(prefix)/include
+
+clean:
+	rm -rf obj lib
