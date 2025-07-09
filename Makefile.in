@@ -3,6 +3,8 @@ VPATH=$(srcdir):bin
 
 prefix=@prefix@
 
+EXEEXT=@EXEEXT@
+
 CC=@CC@
 DEFS=@DEFS@
 DEFAULT_INCLUDES=-I@srcdir@/include
@@ -15,11 +17,15 @@ ARFLAGS=r
 OBJEXT=@OBJEXT@
 SOURCES=@SOURCES@
 OBJECTS=$(patsubst $(srcdir)/source/%.cpp, obj/%.$(OBJEXT), $(SOURCES))
+TEST_OBJECTS=$(patsubst $(srcdir)/tests/%.cpp, obj/tests/%.test.$(OBJEXT), $(TEST_SOURCES))
 INCLUDE_DIRECTORIES=@INCLUDE_DIRECTORIES@
 INCLUDE_FILES=@INCLUDE_FILES@
 
 # New variables for enhanced functionality
 LIB_NAME = msg-sdk-cpp
+TEST_SOURCES = $(shell find $(srcdir)/tests -name '*.cpp')
+TEST_EXECUTABLES = $(patsubst $(srcdir)/tests/%.cpp, testbin/%$(EXEEXT), $(TEST_SOURCES))
+TEST_EXEC_DIR = testbin
 
 # Platform-specific library names
 ifeq ($(OS),Windows_NT)
@@ -29,9 +35,9 @@ else
     LIB_SHARED = lib/lib$(LIB_NAME).so
 endif
 
-.PHONY: all clean static shared install
+.PHONY: all clean test static shared install
 
-all: compile_objects compile_library compile_include shared
+all: compile_objects compile_library compile_include shared test
 
 compile_objects: obj $(OBJECTS)
 
@@ -72,9 +78,28 @@ else
 	$(CC) -shared -o $@ $^ $(LDFLAGS)
 endif
 
+# Test compilation targets
+obj/tests/%.test.$(OBJEXT): $(srcdir)/tests/%.c
+	@mkdir -p $(@D)
+	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+obj/tests/%.test.$(OBJEXT): $(srcdir)/tests/%.cpp
+	@mkdir -p $(@D)
+	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(TEST_EXEC_DIR)/%$(EXEEXT): obj/tests/%.test.$(OBJEXT) lib/lib$(LIB_NAME).a
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $< lib/lib$(LIB_NAME).a -o $@ $(LDFLAGS)
+
+test: $(TEST_EXECUTABLES)
+	@for test in $(TEST_EXECUTABLES); do \
+		echo "Running $$test"; \
+		./$$test || exit 1; \
+	done
+
 install:
 	cp -R lib/* $(prefix)/lib
 	cp -R include/* $(prefix)/include
 
 clean:
-	rm -rf obj lib
+	rm -rf obj lib $(TEST_EXEC_DIR)

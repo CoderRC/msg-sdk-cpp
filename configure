@@ -1,4 +1,4 @@
-ac_subst_vars='
+ac_subst_vars='EXEEXT
 CFLAGS
 CPPFLAGS
 LDFLAGS
